@@ -9,8 +9,6 @@ app.use(express.json())
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 app.use(cors())
 
-const PORT = process.env || 3001
-
 let persons = [
     { id: 1, name: "Arto Hellas", number: "040-123456" },
     { id: 2, name: "Ada Lovelace", number: "39-44-234345" },
@@ -40,24 +38,35 @@ app.route('/api/persons/')
         }
         const person = { id: makeId(), name: request.body.name, number: request.body.number }
         persons.push(person)
-        response.json(person)
+        response.status(201).json(person)
     })
     .put((request, response) => {
-        response.send('hi')
+        console.log(request.body)
+        persons.forEach(person => {       
+            if(person.id === request.body.id){
+                person.number = request.body.number
+                return response.status(204).end()
+            }
+        })
+        response.status(400).end()
     })
 
-app.get('/api/persons/:id', (request, response) => {
-    person = persons.find(person => person.id === Number(request.params.id))
-    if(person){
-        response.json(person)
-    }else response.status(404).send({ name: "unknown", number: "unknown" })
+app.route('/api/persons/:id')
+    .get((request, response) => {
+        person = persons.find(person => person.id === Number(request.params.id))
+        if(person){
+            response.status(200).json(person)
+        }else response.status(404).send({ name: "unknown", number: "unknown" }) 
+    })
+    .delete((request, response) => {
+        const before = persons.length 
+        persons = persons.filter(person => person.id !== Number(request.params.id))
+        const after = persons.length
+        if(after === before) return response.status(400).end()
+        response.status(204).end()
+    })
     
-})
-
-app.delete('/api/persons/:id', (request, response) => {
-    persons = persons.filter(person => person.id !== Number(request.params.id))
-    response.status(204).end()
-})
+const PORT = process.env.PORT || 3001
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
