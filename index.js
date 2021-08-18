@@ -5,6 +5,7 @@ const cors = require('cors')
 
 morgan.token('body', (req, res) => JSON.stringify(req.body))
 const app = express()
+app.use(express.static('build'))
 app.use(express.json())
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 app.use(cors())
@@ -21,7 +22,7 @@ const makeId = () => {
     return maxId + 1
 }
 
-app.get('/', (request, response) => response.send('Hello world and lazy bastards'))
+app.get('/', (request, response) => response.send('/buid.index.html'))
 
 app.get('/info', (request, response) => response.send(`<p>Phonebook has info for ${persons.length} people</p>${new Date()}`))
 
@@ -65,7 +66,7 @@ app.route('/api/persons/:id')
         if(after === before) return response.status(400).end()
         response.status(204).end()
     })
-    
+
 const PORT = process.env.PORT || 3001
 
 app.listen(PORT, () => {
