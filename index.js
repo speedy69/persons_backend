@@ -9,7 +9,7 @@ app.use(express.json())
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 app.use(cors())
 
-const PORT = 3001
+const PORT = process.env || 3001
 
 let persons = [
     { id: 1, name: "Arto Hellas", number: "040-123456" },
@@ -58,8 +58,6 @@ app.delete('/api/persons/:id', (request, response) => {
     persons = persons.filter(person => person.id !== Number(request.params.id))
     response.status(204).end()
 })
-
-
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
