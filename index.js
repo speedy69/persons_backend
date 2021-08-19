@@ -2,6 +2,8 @@ const { request, response, json } = require('express')
 const express = require('express')
 const morgan = require('morgan')
 const cors = require('cors')
+const mongoose = require('mongoose')
+require('dotenv').config()
 
 morgan.token('body', (req, res) => JSON.stringify(req.body))
 const app = express()
@@ -10,24 +12,43 @@ app.use(express.json())
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 app.use(cors())
 
-let persons = [
-    { id: 1, name: "Arto Hellas", number: "040-123456" },
-    { id: 2, name: "Ada Lovelace", number: "39-44-234345" },
-    { id: 3, name: "Jaska Jokunen", number: "555-4568" },
-    { id: 4, name: "Seppo Suikki", number: "555-8554" }
-]
+const url = process.env.MONGODB_URI
 
-const makeId = () => {
-    maxId = Math.max(...persons.map(person => person.id))
-    return maxId + 1
-}
+console.log('conneting to', url)
+mongoose.connect(url, { 
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        useFindAndModify: false,
+        useCreateIndex: true
+        })
+        .then(result => console.log('connected to MongoDB'))
+        .catch(error => console.log('error connecting to Mongodb', error))
+
+const personSchema = new mongoose.Schema({
+    name: String,
+    number: String,
+})
+
+personSchema.set('toJSON', {
+    transform: (document, returnedObject) => {
+      returnedObject.id = returnedObject._id.toString()
+      delete returnedObject._id
+      delete returnedObject.__v
+    }
+  })
+
+const Person = mongoose.model('Persons', personSchema) 
 
 app.get('/', (request, response) => response.send('/buid.index.html'))
 
 app.get('/info', (request, response) => response.send(`<p>Phonebook has info for ${persons.length} people</p>${new Date()}`))
 
 app.route('/api/persons/')
-    .get((request, response) => response.json(persons) )
+    .get((request, response) => {
+        Person.find({}).then(result => {
+            response.json(result)
+        })       
+    })
     .post((request, response) => {
         const body = request.body
 
@@ -37,34 +58,38 @@ app.route('/api/persons/')
         if(!body.number) {
             return response.status(404).json({ error: 'number missing'})
         }
-        const person = { id: makeId(), name: request.body.name, number: request.body.number }
-        persons.push(person)
+        const person = new Person({
+            name: body.name,
+            number: body.number,
+        })
+        person.save()
         response.status(201).json(person)
     })
     .put((request, response) => {
-        console.log(request.body)
-        persons.forEach(person => {       
-            if(person.id === request.body.id){
-                person.number = request.body.number
-                return response.status(204).end()
-            }
-        })
-        response.status(400).end()
+        Person.findByIdAndUpdate(request.body.id, { number: request.body.number })
+            .then(result => response.status(201).json(result))
+            .catch(error => response.status(500).end())
     })
 
 app.route('/api/persons/:id')
     .get((request, response) => {
-        person = persons.find(person => person.id === Number(request.params.id))
-        if(person){
-            response.status(200).json(person)
-        }else response.status(404).send({ name: "unknown", number: "unknown" }) 
+        person = Person.findById(request.params.id)
+            .then(result => {
+                if(result) response.status(200).json(result)
+                else response.status(404).end()
+                mongoose.connection.close()
+            })
+            .catch(error => response.status(500).send(error))
     })
     .delete((request, response) => {
-        const before = persons.length 
-        persons = persons.filter(person => person.id !== Number(request.params.id))
-        const after = persons.length
-        if(after === before) return response.status(400).end()
-        response.status(204).end()
+        Person.findByIdAndDelete(request.params.id)
+            .then(result => {
+                if(result){
+                    response.status(204).end()
+                } 
+                else response.status(404).end()
+            })
+            .catch(error => response.status(500).end())
     })
 
 const PORT = process.env.PORT || 3001
