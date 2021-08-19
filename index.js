@@ -67,11 +67,20 @@ app.route('/api/persons/')
     })
     .put((request, response) => {
         Person.findByIdAndUpdate(request.body.id, { number: request.body.number })
-            .then(result => response.status(201).json(result))
+            .then(result => response.status(204).json(result))
             .catch(error => response.status(500).end())
     })
 
 app.route('/api/persons/:id')
+    .delete((request, response) => {
+        Person.findByIdAndDelete(request.params.id)
+            .then(result => {
+                if(result){
+                    response.status(204).end()
+                }else response.status(404).end()
+            })
+            .catch(error => response.status(500).end())
+    })
     .get((request, response) => {
         person = Person.findById(request.params.id)
             .then(result => {
@@ -80,16 +89,6 @@ app.route('/api/persons/:id')
                 mongoose.connection.close()
             })
             .catch(error => response.status(500).send(error))
-    })
-    .delete((request, response) => {
-        Person.findByIdAndDelete(request.params.id)
-            .then(result => {
-                if(result){
-                    response.status(204).end()
-                } 
-                else response.status(404).end()
-            })
-            .catch(error => response.status(500).end())
     })
 
 const PORT = process.env.PORT || 3001
