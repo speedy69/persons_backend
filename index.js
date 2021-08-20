@@ -1,47 +1,21 @@
-const { request, response, json } = require('express')
-const express = require('express')
-const morgan = require('morgan')
-const cors = require('cors')
-const mongoose = require('mongoose')
-require('dotenv').config()
-
+const result = require('dotenv').config()
+const express = require('express'), app = express(), morgan = require('morgan'), cors = require('cors'),
+      Person = require('./mongodb'), 
+      PORT = process.env.PORT
+      
 morgan.token('body', (req, res) => JSON.stringify(req.body))
-const app = express()
 app.use(express.static('build'))
 app.use(express.json())
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 app.use(cors())
 
-const url = process.env.MONGODB_URI
-
-console.log('conneting to', url)
-mongoose.connect(url, { 
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-        useFindAndModify: false,
-        useCreateIndex: true
-        })
-        .then(result => console.log('connected to MongoDB'))
-        .catch(error => console.log('error connecting to Mongodb', error))
-
-const personSchema = new mongoose.Schema({
-    name: String,
-    number: String,
-})
-
-personSchema.set('toJSON', {
-    transform: (document, returnedObject) => {
-      returnedObject.id = returnedObject._id.toString()
-      delete returnedObject._id
-      delete returnedObject.__v
-    }
-  })
-
-const Person = mongoose.model('Persons', personSchema) 
-
 app.get('/', (request, response) => response.send('/buid.index.html'))
 
-app.get('/info', (request, response) => response.send(`<p>Phonebook has info for ${persons.length} people</p>${new Date()}`))
+app.get('/info', (request, response) => {
+        Person.find({}).then(result => {
+            response.send(`<p>Phonebook has info for ${result.length} people</p>${new Date()}`)
+        })
+    })
 
 app.route('/api/persons/')
     .get((request, response) => {
@@ -49,50 +23,64 @@ app.route('/api/persons/')
             response.json(result)
         })       
     })
-    .post((request, response) => {
-        const body = request.body
-
-        if(!body.name) {
-            return response.status(404).json({ error: 'name missing' })
-        }
-        if(!body.number) {
-            return response.status(404).json({ error: 'number missing'})
-        }
+    .post((request, response, next) => {
         const person = new Person({
-            name: body.name,
-            number: body.number,
+            name: request.body.name,
+            number: request.body.number,
         })
-        person.save()
-        response.status(201).json(person)
+        person.save().then(result => response.status(201).json(result)).catch(error => next(error))
     })
-    .put((request, response) => {
-        Person.findByIdAndUpdate(request.body.id, { number: request.body.number })
-            .then(result => response.status(204).json(result))
-            .catch(error => response.status(500).end())
+    .put((request, response, next) => {
+        console.log(request.body, '<------ ennen')
+        Person.findByIdAndUpdate(request.body.id, { name: request.body.name, number: request.body.number }, { runValidators: true })
+            .then(result => {
+                if(!result && request.body.id){
+                  response.status(204).end()
+                }else response.status(404).end()
+            })
+            .catch(error => next(error))
     })
 
 app.route('/api/persons/:id')
-    .delete((request, response) => {
+    .delete((request, response, next) => {
         Person.findByIdAndDelete(request.params.id)
             .then(result => {
                 if(result){
                     response.status(204).end()
                 }else response.status(404).end()
             })
-            .catch(error => response.status(500).end())
+            .catch(error => next(error))
     })
-    .get((request, response) => {
+    .get((request, response, next) => {
         person = Person.findById(request.params.id)
             .then(result => {
                 if(result) response.status(200).json(result)
-                else response.status(404).end()
-                mongoose.connection.close()
+                else response.status(404).json({ error: 'person not found on database'})
             })
-            .catch(error => response.status(500).send(error))
+            .catch(error => next(error))
     })
 
-const PORT = process.env.PORT || 3001
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message, '<--------- error error message--------------------')
+    if (error.name === 'CastError') {
+        return response.status(400).send({ error: 'malformatted id' })
+    }
+    if (error.name === 'ValidationError'){
+        if(error.errors['name']){
+            return response.status(400).send({error: 'Name missing'})
+        }else{
+            return response.status(400).send({error: 'Number missing'})
+         }
+    }
+    if(error.name === 'MongoError'){
+        return response.status(406).send({error: 'Name is already in phonebook'})
+    }
+    if(error.name === 'SyntaxError') return response.status(400).send({error: 'Something goes wrong'})
+    next(error)
+}
+
+app.use(errorHandler)
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`)
-})
+        console.log(`Server running on port ${PORT}`)
+    })
