@@ -4,6 +4,7 @@
   "description": "kokeilua",
   "main": "index.js",
   "scripts": {
+    "lint": "eslint .",
     "dev": "nodemon index.js",
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -18,6 +19,7 @@
     "morgan": "^1.10.0"
   },
   "devDependencies": {
+    "eslint": "^7.32.0",
     "nodemon": "^2.0.12"
   }
 }
